@@ -25,6 +25,16 @@ public actor NascClient {
         return (id, resp["slug"] as? String ?? id)
     }
 
+    /// Register this device's APNs token so nasc can push it (e.g. on approval needed).
+    public func registerDevice(apnsToken: String, env: String = "sandbox", label: String? = nil) async throws {
+        let lobby = PhoenixChannel()
+        try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
+        var payload: [String: Any] = ["apns_token": apnsToken, "platform": "ios", "apns_env": env]
+        if let label { payload["label"] = label }
+        _ = try await lobby.call(event: "register_device", payload: payload)
+        await lobby.disconnect()
+    }
+
     /// Attach to a session: join `session:<id>` and return a live event stream
     /// (the log is replayed on join, then live events follow).
     public func attach(sessionID: String) async throws -> AsyncStream<NascEvent> {
