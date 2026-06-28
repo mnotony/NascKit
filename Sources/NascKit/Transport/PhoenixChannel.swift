@@ -33,7 +33,9 @@ public actor PhoenixChannel: ChannelProtocol {
     public func connect(serverURL: String, token: String, topic: String) async throws {
         self.topic = topic
 
-        let wsURL = "\(serverURL)/client/websocket?vsn=2.0.0&token=\(token)"
+        // URLs carry no whitespace — drop any stray trailing text from the input.
+        let base = serverURL.split(whereSeparator: { $0.isWhitespace }).first.map(String.init) ?? serverURL
+        let wsURL = "\(base)/client/websocket?vsn=2.0.0&token=\(token)"
         guard let url = URL(string: wsURL) else { throw ChannelError.invalidURL(wsURL) }
 
         Log.channel.info("Connecting to \(serverURL, privacy: .public)/client/websocket [\(topic, privacy: .public)]")

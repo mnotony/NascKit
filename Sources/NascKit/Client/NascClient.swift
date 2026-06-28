@@ -44,6 +44,59 @@ public actor NascClient {
         }
     }
 
+    /// Rename a session (sets its title).
+    public func renameSession(id: String, title: String) async throws {
+        try await lobbyMutate("rename_session", ["id": id, "title": title])
+    }
+
+    /// Delete a session (cascades its events).
+    public func deleteSession(id: String) async throws {
+        try await lobbyMutate("delete_session", ["id": id])
+    }
+
+    /// Live session list: yields the current list, then re-yields whenever any device
+    /// creates/renames/deletes a session (server broadcasts `sessions_changed`).
+    public func lobbyUpdates() async throws -> AsyncStream<[SessionSummary]> {
+        let lobby = PhoenixChannel()
+        try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
+        let pushes = lobby.pushes
+
+        return AsyncStream { continuation in
+            let task = Task {
+                if let list = try? await Self.fetchSessions(lobby) { continuation.yield(list) }
+                for await frame in pushes where frame.event == "sessions_changed" {
+                    if let list = try? await Self.fetchSessions(lobby) { continuation.yield(list) }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+                Task { await lobby.disconnect() }
+            }
+        }
+    }
+
+    private func lobbyMutate(_ event: String, _ payload: [String: Any]) async throws {
+        let lobby = PhoenixChannel()
+        try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
+        _ = try await lobby.call(event: event, payload: payload)
+        await lobby.disconnect()
+    }
+
+    private static func fetchSessions(_ lobby: PhoenixChannel) async throws -> [SessionSummary] {
+        let resp = try await lobby.call(event: "list_sessions", payload: [:])
+        let arr = resp["sessions"] as? [[String: Any]] ?? []
+        return arr.compactMap { dict in
+            guard let id = dict["id"] as? String else { return nil }
+            return SessionSummary(
+                id: id,
+                slug: dict["slug"] as? String ?? id,
+                status: dict["status"] as? String,
+                title: dict["title"] as? String
+            )
+        }
+    }
+
     /// Register this device's APNs token so nasc can push it (e.g. on approval needed).
     public func registerDevice(apnsToken: String, env: String = "sandbox", label: String? = nil) async throws {
         let lobby = PhoenixChannel()
