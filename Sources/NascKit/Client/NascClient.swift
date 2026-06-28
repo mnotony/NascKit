@@ -25,6 +25,25 @@ public actor NascClient {
         return (id, resp["slug"] as? String ?? id)
     }
 
+    /// List recent sessions (newest first) via the lobby.
+    public func listSessions() async throws -> [SessionSummary] {
+        let lobby = PhoenixChannel()
+        try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
+        let resp = try await lobby.call(event: "list_sessions", payload: [:])
+        await lobby.disconnect()
+
+        let arr = resp["sessions"] as? [[String: Any]] ?? []
+        return arr.compactMap { dict in
+            guard let id = dict["id"] as? String else { return nil }
+            return SessionSummary(
+                id: id,
+                slug: dict["slug"] as? String ?? id,
+                status: dict["status"] as? String,
+                title: dict["title"] as? String
+            )
+        }
+    }
+
     /// Register this device's APNs token so nasc can push it (e.g. on approval needed).
     public func registerDevice(apnsToken: String, env: String = "sandbox", label: String? = nil) async throws {
         let lobby = PhoenixChannel()

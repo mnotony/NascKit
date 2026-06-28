@@ -1,5 +1,20 @@
 import Foundation
 
+/// A session in the list (from the lobby's `list_sessions`).
+public struct SessionSummary: Sendable, Identifiable, Hashable {
+    public let id: String
+    public let slug: String
+    public let status: String?
+    public let title: String?
+
+    public init(id: String, slug: String, status: String? = nil, title: String? = nil) {
+        self.id = id
+        self.slug = slug
+        self.status = status
+        self.title = title
+    }
+}
+
 /// A session event as seen by a client: a durable `event` (assistant_msg, tool_call,
 /// tool_result, input_requested, user_msg, status_change), a streaming `token`, or
 /// `done`.
