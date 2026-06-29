@@ -141,6 +141,24 @@ public actor NascClient {
         _ = try await requireSession().call(event: "interrupt", payload: ["content": content])
     }
 
+    /// Neural TTS via nasc's `/tts` proxy (croí). Returns WAV audio bytes.
+    public func synthesize(_ text: String, voiceID: String = "bf_emma") async throws -> Data {
+        let base = endpoint.httpBase.split(whereSeparator: { $0.isWhitespace }).first.map(String.init)
+            ?? endpoint.httpBase
+        guard let url = URL(string: base + "/tts") else { throw ChannelError.invalidURL(base + "/tts") }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "voice_id": voiceID])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        return data
+    }
+
     public func disconnect() async {
         await session?.disconnect()
         session = nil
