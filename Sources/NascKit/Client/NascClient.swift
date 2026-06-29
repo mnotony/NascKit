@@ -97,6 +97,33 @@ public actor NascClient {
         }
     }
 
+    /// Live fleet status: yields the current snapshot, then re-yields whenever agents
+    /// connect/disconnect or sessions change.
+    public func fleetUpdates() async throws -> AsyncStream<FleetStatus> {
+        let lobby = PhoenixChannel()
+        try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
+        let pushes = lobby.pushes
+
+        return AsyncStream { continuation in
+            let task = Task {
+                if let status = try? await Self.fetchFleet(lobby) { continuation.yield(status) }
+                for await frame in pushes where frame.event == "fleet_changed" || frame.event == "sessions_changed" {
+                    if let status = try? await Self.fetchFleet(lobby) { continuation.yield(status) }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+                Task { await lobby.disconnect() }
+            }
+        }
+    }
+
+    private static func fetchFleet(_ lobby: PhoenixChannel) async throws -> FleetStatus {
+        let resp = try await lobby.call(event: "fleet_status", payload: [:])
+        return FleetStatus.from(resp)
+    }
+
     /// Register this device's APNs token so nasc can push it (e.g. on approval needed).
     public func registerDevice(apnsToken: String, env: String = "sandbox", label: String? = nil) async throws {
         let lobby = PhoenixChannel()
