@@ -11,11 +11,14 @@ public actor NascClient {
         self.endpoint = endpoint
     }
 
-    /// Create a new session via the lobby. Returns `(id, slug)`.
-    public func createSession(persona: String? = nil) async throws -> (id: String, slug: String) {
+    /// Create a new session via the lobby. Returns `(id, slug)`. A `project` name lets nasc route
+    /// the session to an agent that can reach it (e.g. the one holding that project's client VPN).
+    public func createSession(persona: String? = nil, project: String? = nil) async throws -> (id: String, slug: String) {
         let lobby = PhoenixChannel()
         try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
-        let payload: [String: Any] = persona.map { ["persona_slug": $0] } ?? [:]
+        var payload: [String: Any] = [:]
+        if let persona { payload["persona_slug"] = persona }
+        if let project { payload["project"] = project }
         let resp = try await lobby.call(event: "create_session", payload: payload)
         await lobby.disconnect()
 
@@ -23,6 +26,20 @@ public actor NascClient {
             throw ChannelError.callFailed("no session id in reply")
         }
         return (id, resp["slug"] as? String ?? id)
+    }
+
+    /// The projects the user can start a session on — the picker source.
+    public func listProjects() async throws -> [Project] {
+        let lobby = PhoenixChannel()
+        try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
+        let resp = try await lobby.call(event: "list_projects", payload: [:])
+        await lobby.disconnect()
+
+        let arr = resp["projects"] as? [[String: Any]] ?? []
+        return arr.compactMap { dict in
+            guard let name = dict["name"] as? String else { return nil }
+            return Project(name: name, capability: dict["capability"] as? String, title: dict["title"] as? String)
+        }
     }
 
     /// List recent sessions (newest first) via the lobby.
