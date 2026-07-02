@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Projects** — `NascClient.listProjects()` returns the registered projects (the picker source),
+  and `createSession(project:)` scopes a new session to one so nasc routes it to an agent that can
+  reach it. Adds the `Project` model (`name`, `capability`, `title`).
+
 ## v0.1.0 — 2026-06-28
 
 First Swift client.
