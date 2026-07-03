@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.2.0 — 2026-07-03
+
+Projects: the picker source + project-scoped session creation.
+
 - **Projects** — `NascClient.listProjects()` returns the registered projects (the picker source),
   and `createSession(project:)` scopes a new session to one so nasc routes it to an agent that can
   reach it. Adds the `Project` model (`name`, `capability`, `title`).
