@@ -13,12 +13,14 @@ public actor NascClient {
 
     /// Create a new session via the lobby. Returns `(id, slug)`. A `project` name lets nasc route
     /// the session to an agent that can reach it (e.g. the one holding that project's client VPN).
-    public func createSession(persona: String? = nil, project: String? = nil) async throws -> (id: String, slug: String) {
+    public func createSession(persona: String? = nil, project: String? = nil, autonomy: Bool = false) async throws -> (id: String, slug: String) {
         let lobby = PhoenixChannel()
         try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
         var payload: [String: Any] = [:]
         if let persona { payload["persona_slug"] = persona }
         if let project { payload["project"] = project }
+        // "turn this task loose": the run auto-approves safe tool calls; consequential ones still pause.
+        if autonomy { payload["autonomy"] = true }
         let resp = try await lobby.call(event: "create_session", payload: payload)
         await lobby.disconnect()
 
@@ -139,6 +141,60 @@ public actor NascClient {
     private static func fetchFleet(_ lobby: PhoenixChannel) async throws -> FleetStatus {
         let resp = try await lobby.call(event: "fleet_status", payload: [:])
         return FleetStatus.from(resp)
+    }
+
+    // --- agents: roots + autonomy, managed from the phone ---
+
+    /// The fleet's agents with their project roots + autonomy — the Agents screen source.
+    public func listAgents() async throws -> [Agent] {
+        let lobby = PhoenixChannel()
+        try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
+        let agents = try await Self.fetchAgents(lobby)
+        await lobby.disconnect()
+        return agents
+    }
+
+    /// Turn an agent loose (or rein it in): its runs auto-approve safe tool calls.
+    public func setAgentAutonomy(agentID: String, on: Bool) async throws {
+        try await lobbyMutate("set_agent_autonomy", ["agent_id": agentID, "autonomous": on])
+    }
+
+    /// Add a project root to an agent (nasc pushes it to the agent live).
+    public func addAgentRoot(agentID: String, path: String) async throws {
+        try await lobbyMutate("add_agent_root", ["agent_id": agentID, "path": path])
+    }
+
+    /// Remove a project root from an agent.
+    public func removeAgentRoot(agentID: String, path: String) async throws {
+        try await lobbyMutate("remove_agent_root", ["agent_id": agentID, "path": path])
+    }
+
+    /// Live agent list: the current agents, then re-yields on `agents_changed` (roots/autonomy
+    /// edits) and `fleet_changed` (connect/disconnect).
+    public func agentUpdates() async throws -> AsyncStream<[Agent]> {
+        let lobby = PhoenixChannel()
+        try await lobby.connect(serverURL: endpoint.serverURL, token: endpoint.token, topic: NascEndpoint.lobbyTopic)
+        let pushes = lobby.pushes
+
+        return AsyncStream { continuation in
+            let task = Task {
+                if let list = try? await Self.fetchAgents(lobby) { continuation.yield(list) }
+                for await frame in pushes where frame.event == "agents_changed" || frame.event == "fleet_changed" {
+                    if let list = try? await Self.fetchAgents(lobby) { continuation.yield(list) }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+                Task { await lobby.disconnect() }
+            }
+        }
+    }
+
+    private static func fetchAgents(_ lobby: PhoenixChannel) async throws -> [Agent] {
+        let resp = try await lobby.call(event: "list_agents", payload: [:])
+        let arr = resp["agents"] as? [[String: Any]] ?? []
+        return arr.compactMap(Agent.from)
     }
 
     /// Register this device's APNs token so nasc can push it (e.g. on approval needed).
