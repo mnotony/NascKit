@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.3.0 — 2026-07-24
+
+- **Agent roots + autonomy API** — new `Agent` model (`id` / `online` / `capabilities` / `roots` /
+  `autonomous`) + `NascClient` methods: `listAgents`, `agentUpdates` (live, re-yields on
+  `agents_changed` / `fleet_changed`), `setAgentAutonomy`, `addAgentRoot`, `removeAgentRoot`.
+  `createSession(autonomy:)` turns a single task loose. Backs the nasc-ios Agents screen.
+
 ## v0.2.0 — 2026-07-03
 
 Projects: the picker source + project-scoped session creation.
