@@ -9,7 +9,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "NascKit"),
-        .executableTarget(name: "nasckit-smoke", dependencies: ["NascKit"])
+        .executableTarget(name: "nasckit-smoke", dependencies: ["NascKit"]),
+        .testTarget(name: "NascKitTests", dependencies: ["NascKit"])
     ],
     // Transport harvested from RelayKit; passes JSON as [String: Any] across actor
     // boundaries — Swift 5 mode for now (modernize later).
