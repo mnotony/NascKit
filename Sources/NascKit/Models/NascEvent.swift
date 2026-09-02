@@ -4,14 +4,24 @@ import Foundation
 public struct SessionSummary: Sendable, Identifiable, Hashable {
     public let id: String
     public let slug: String
+    /// Persisted lifecycle status: `active` / `suspended` / `ended`.
     public let status: String?
     public let title: String?
+    /// Live run-state: `running` / `awaiting_input` / `interrupted` / `idle` (see protocol lobby).
+    public let runState: String?
 
-    public init(id: String, slug: String, status: String? = nil, title: String? = nil) {
+    public init(
+        id: String,
+        slug: String,
+        status: String? = nil,
+        title: String? = nil,
+        runState: String? = nil
+    ) {
         self.id = id
         self.slug = slug
         self.status = status
         self.title = title
+        self.runState = runState
     }
 }
 
