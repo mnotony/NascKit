@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## v0.4.0 — 2026-09-02
+
+Model the input/approval contract and edit diffs, so the app can render them.
+
+- **`Approval`** (#5) — parses `input_requested` into a typed value (`tool` / `reauth` / a pre-contract
+  fallback) with tool, summary, reason, severity, and an `expires_at`. `NascEvent` now carries `approval`
+  (on `input_requested`) and `outcome` (on the new `input_provided`).
+- **`EditDiff`** (#6) — parses an edit tool's `tool_result` (a `path (+N -M)` summary + a `+`/`-` diff)
+  into a summary, counts, and classified lines, for a coloured transcript diff.
+- **`SessionSummary.runState`** (#7) — carries the live run-state (`running` / `awaiting_input` /
+  `interrupted` / `idle`) from `list_sessions`, so the session list can differentiate by run-state.
+- Adds a `NascKitTests` target (12 tests).
+
 ## v0.3.0 — 2026-07-24
 
 - **Agent roots + autonomy API** — new `Agent` model (`id` / `online` / `capabilities` / `roots` /

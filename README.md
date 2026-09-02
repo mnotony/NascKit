@@ -16,6 +16,10 @@ for await event in events { /* tool_call / tool_result / assistant_msg / done */
 · `registerDevice`. Transport: Phoenix channels over `URLSessionWebSocketTask`
 (`PhoenixChannel`/`PhoenixFrame`, harvested from RelayKit, adapted to nasc's `/client`).
 
+Models: `SessionSummary` (with a live `runState`), `NascEvent`, `Approval` (a parsed
+`input_requested` — tool/reason/severity/`expires_at`), and `EditDiff` (an edit tool's
+result parsed into a renderable `+`/`-` diff).
+
 ```sh
 swift build
 swift run nasckit-smoke ws://127.0.0.1:4100 "hello"   # live smoke against nasc (macOS)
