@@ -58,7 +58,8 @@ public actor NascClient {
                 id: id,
                 slug: dict["slug"] as? String ?? id,
                 status: dict["status"] as? String,
-                title: dict["title"] as? String
+                title: dict["title"] as? String,
+                runState: dict["run_state"] as? String
             )
         }
     }
@@ -111,7 +112,8 @@ public actor NascClient {
                 id: id,
                 slug: dict["slug"] as? String ?? id,
                 status: dict["status"] as? String,
-                title: dict["title"] as? String
+                title: dict["title"] as? String,
+                runState: dict["run_state"] as? String
             )
         }
     }
