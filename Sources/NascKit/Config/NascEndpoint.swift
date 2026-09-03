@@ -1,14 +1,15 @@
 import Foundation
 
-/// Where to reach nasc, and the token to authenticate with. `serverURL` is a
-/// `ws://` or `wss://` URL; nasc's `/client` socket currently accepts any token.
+/// Where to reach nasc, and the per-device credential to authenticate with. `serverURL` is a
+/// `ws://` or `wss://` URL. `credential` is issued by nasc (`mix nasc.credential issue device …`)
+/// and presented on the `/client` socket; empty means an unauthenticated (dual-accept) connection.
 public struct NascEndpoint: Sendable {
     public let serverURL: String
-    public let token: String
+    public let credential: String
 
-    public init(serverURL: String = NascEndpoint.defaultServerURL, token: String = "") {
+    public init(serverURL: String = NascEndpoint.defaultServerURL, credential: String = "") {
         self.serverURL = serverURL
-        self.token = token
+        self.credential = credential
     }
 
     public static let defaultServerURL = "ws://127.0.0.1:4100"

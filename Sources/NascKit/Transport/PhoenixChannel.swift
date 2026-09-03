@@ -30,12 +30,18 @@ public actor PhoenixChannel: ChannelProtocol {
 
     /// Connect to nasc's `/client` socket and join `topic` (e.g. `lobby` or
     /// `session:<id>`). `serverURL` is like `ws://127.0.0.1:4100` (no trailing slash).
-    public func connect(serverURL: String, token: String, topic: String) async throws {
+    public func connect(serverURL: String, credential: String, topic: String) async throws {
         self.topic = topic
 
         // URLs carry no whitespace — drop any stray trailing text from the input.
         let base = serverURL.split(whereSeparator: { $0.isWhitespace }).first.map(String.init) ?? serverURL
-        let wsURL = "\(base)/client/websocket?vsn=2.0.0&token=\(token)"
+        // Present the device credential only when we have one; an empty value would be rejected,
+        // so omit the param entirely and take nasc's open (dual-accept) path during migration.
+        var wsURL = "\(base)/client/websocket?vsn=2.0.0"
+        if !credential.isEmpty {
+            let encoded = credential.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? credential
+            wsURL += "&credential=\(encoded)"
+        }
         guard let url = URL(string: wsURL) else { throw ChannelError.invalidURL(wsURL) }
 
         Log.channel.info("Connecting to \(serverURL, privacy: .public)/client/websocket [\(topic, privacy: .public)]")
