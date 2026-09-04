@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## v0.5.0 — 2026-09-03
+
+Authenticate the `/client` socket with a per-device credential.
+
+- **Device credential** (#9) — `NascEndpoint` now carries a per-device `credential` (issued by nasc,
+  `mix nasc.credential issue device …`) in place of the ignored placeholder token. `PhoenixChannel`
+  appends `?credential=` only when it's set, so an empty value takes nasc's open (dual-accept) path
+  unchanged during migration.
+- **BREAKING** — `NascEndpoint(token:)` is renamed to `NascEndpoint(credential:)` (and the
+  `token` property to `credential`). Update call sites to pass `credential:`.
+
 ## v0.4.0 — 2026-09-02
 
 Model the input/approval contract and edit diffs, so the app can render them.
