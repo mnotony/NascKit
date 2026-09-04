@@ -252,6 +252,11 @@ public actor NascClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Present the device credential when we have one; nasc requires it on `/tts` once the
+        // credentials-only flip is on, and ignores it while still dual-accepting.
+        if !endpoint.credential.isEmpty {
+            request.setValue("Bearer \(endpoint.credential)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "voice_id": voiceID])
 
         let (data, response) = try await URLSession.shared.data(for: request)
