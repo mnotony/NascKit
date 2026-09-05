@@ -13,7 +13,8 @@ for await event in events { /* tool_call / tool_result / assistant_msg / done */
 
 `NascEndpoint` also takes a per-device `credential` (issued by nasc,
 `mix nasc.credential issue device …`) — `NascEndpoint(serverURL:, credential:)`. It's
-presented on the `/client` socket; an empty credential takes nasc's open (dual-accept) path.
+presented on the `/client` socket and as `Authorization: Bearer` on the `/tts` POST; an empty
+credential takes nasc's open (dual-accept) path.
 
 `NascClient`: `createSession` · `listSessions` / `lobbyUpdates` (live) · `attach`
 (event stream) · `prompt` · `decide` · `interrupt` · `renameSession` · `deleteSession`

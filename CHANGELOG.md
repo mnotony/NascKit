@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.5.1 — 2026-09-04
+
+- **`/tts` credential** (#11) — `NascClient.synthesize` sends the endpoint's device credential as
+  `Authorization: Bearer <credential>` on the `/tts` POST (omitted when empty), so voice mode keeps
+  working once nasc requires a credential on `/tts`.
+
 ## v0.5.0 — 2026-09-03
 
 Authenticate the `/client` socket with a per-device credential.
