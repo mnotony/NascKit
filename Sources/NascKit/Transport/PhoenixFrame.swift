@@ -42,6 +42,10 @@ public struct InFrame: @unchecked Sendable {
         self.payload = payload
     }
 
+    /// The server closed (`phx_close`) or crashed (`phx_error`) the channel: nothing more arrives on
+    /// it, and this client does not rejoin.
+    public var endsChannel: Bool { event == "phx_close" || event == "phx_error" }
+
     public static func parse(_ text: String) throws -> InFrame {
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data),

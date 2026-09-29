@@ -21,9 +21,11 @@ credential takes nasc's open (dual-accept) path.
 · `registerDevice`. Transport: Phoenix channels over `URLSessionWebSocketTask`
 (`PhoenixChannel`/`PhoenixFrame`, harvested from RelayKit, adapted to nasc's `/client`).
 
-Models: `SessionSummary` (with a live `runState`), `NascEvent`, `Approval` (a parsed
-`input_requested` — tool/reason/severity/`expires_at`), and `EditDiff` (an edit tool's
-result parsed into a renderable `+`/`-` diff).
+Models: `SessionSummary` (with a live `runState`), `NascEvent` (a `tool_call` carries the agent's
+`narration`), `Approval` (a parsed `input_requested` — tool/reason/severity/`expires_at`), and
+`EditDiff` (an edit tool's result parsed into a renderable `+`/`-` diff). `Conversation.items` projects
+a session's events into what a person reads — user and agent messages, notices, and the work between
+them folded into counted `Steps`.
 
 ```sh
 swift build
