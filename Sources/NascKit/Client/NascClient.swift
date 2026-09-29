@@ -221,6 +221,9 @@ public actor NascClient {
         return AsyncStream { continuation in
             let task = Task {
                 for await frame in pushes {
+                    // The channel crashed server-side: nothing more arrives on it, so end the stream
+                    // rather than read as attached (this client does not rejoin).
+                    if frame.event == "phx_error" { break }
                     if let event = NascEvent.from(frame: frame) {
                         continuation.yield(event)
                     }

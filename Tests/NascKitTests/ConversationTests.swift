@@ -168,6 +168,16 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(render(Conversation.items(events)), ["you (queued): wait", "you: wait"])
     }
 
+    func testAMessageThatNeverReachedNascSaysSo() {
+        let events = [
+            userMsg(1, "status?"),
+            assistantMsg(2, "Idle."),
+            NascEvent(kind: "unsent", role: "user", content: "run it again"),  // SessionModel: prompt threw
+        ]
+
+        XCTAssertEqual(render(Conversation.items(events)), ["you: status?", "agent: Idle.", "you (not sent): run it again"])
+    }
+
     func testIdsAreUniqueAndAGrowingGroupKeepsItsID() {
         let first = toolCall("read_file", seq: 2, narration: "Reading.")
         let before = Conversation.items([userMsg(1, "go"), first, toolResult("read_file", seq: 3)])
@@ -193,7 +203,9 @@ final class ConversationTests: XCTestCase {
     private func render(_ items: [ConversationItem]) -> [String] {
         items.map { item in
             switch item {
-            case let .user(event, queued): return "you\(queued ? " (queued)" : ""): \(event.content ?? "")"
+            case let .user(event, delivery):
+                let mark = [.queued: " (queued)", .unsent: " (not sent)"][delivery] ?? ""
+                return "you\(mark): \(event.content ?? "")"
             case let .agent(_, text): return "agent: \(text)"
             case let .notice(event): return "notice: \(event.content ?? "")"
             case let .steps(steps): return "steps: \(steps.toolCount) · \(steps.lastTool ?? "")"

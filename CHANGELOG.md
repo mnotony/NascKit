@@ -11,8 +11,11 @@ Read a session as a conversation. Pairs with ogma's `tool_call` narration and na
   landed.
 - **`Conversation.items`** — a pure projection of a session's events into `ConversationItem`s: the
   user's messages, the agent's (final answers and narration), `system` notices, and everything
-  between folded into a `Steps` group with its tool count and last tool. A client-local `interrupt`
-  echo shows as queued until the agent logs it as a `user_msg`.
+  between folded into a `Steps` group with its tool count and last tool. Each user entry carries its
+  `Delivery`: a client-local `interrupt` echo is `.queued` until the agent logs it as a `user_msg`, and
+  an `unsent` echo (sending failed) is `.unsent`.
+- **`attach` ends on a channel crash** — a `phx_error` finishes the event stream instead of leaving a
+  client that reads as attached to a channel that will never push again.
 
 ## v0.5.1 — 2026-09-04
 

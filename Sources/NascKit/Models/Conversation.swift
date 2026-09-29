@@ -3,9 +3,8 @@ import Foundation
 /// One entry in a session read as a conversation: what was said, with the agent's work between
 /// messages folded into counted steps.
 public enum ConversationItem: Identifiable, Sendable {
-    /// Something the user said. `queued` marks a client-local `interrupt` echo the agent has not
-    /// logged yet (it takes guidance at its next turn boundary, or never if the run already ended).
-    case user(NascEvent, queued: Bool)
+    /// Something the user said, and whether it got there.
+    case user(NascEvent, Delivery)
     /// Something the agent said: a final `assistant_msg`, or the narration that opened a tool turn.
     case agent(id: String, text: String)
     /// A `system` line — an agent error, a failed attach.
@@ -23,6 +22,17 @@ public enum ConversationItem: Identifiable, Sendable {
     }
 }
 
+/// Where a user message stands.
+public enum Delivery: Sendable, Equatable {
+    /// Logged by nasc, or sent (a prompt's local echo — nasc logs it on dispatch).
+    case sent
+    /// A client-local `interrupt` echo the agent has not logged yet; it takes guidance at its next
+    /// turn boundary.
+    case queued
+    /// A client-local `unsent` echo: the prompt or interrupt never reached nasc.
+    case unsent
+}
+
 /// A run of background events (tool calls, their results, run markers) between two conversation
 /// entries. Its id is its first event's, so a group keeps its identity while it grows.
 public struct Steps: Sendable {
@@ -35,8 +45,9 @@ public struct Steps: Sendable {
 
 public enum Conversation {
     /// Project a session's events into conversation items. `events` is what a client holds: the
-    /// replayed log, live durable events, and its own local echoes — `user_msg` without a sequence
-    /// (a sent prompt) and `interrupt` (guidance sent mid-run, never on the wire).
+    /// replayed log, live durable events, and its own local echoes, which never go on the wire — a
+    /// `user_msg` without a sequence (a sent prompt), `interrupt` (guidance sent mid-run) and
+    /// `unsent` (either one, when sending failed).
     public static func items(_ events: [NascEvent]) -> [ConversationItem] {
         let answered = answeredInterrupts(events)
         var items: [ConversationItem] = []
@@ -51,11 +62,14 @@ public enum Conversation {
             switch event.kind {
             case "user_msg":
                 flush()
-                items.append(.user(event, queued: false))
+                items.append(.user(event, .sent))
             case "interrupt":
                 guard !answered.contains(event.id) else { continue }
                 flush()
-                items.append(.user(event, queued: true))
+                items.append(.user(event, .queued))
+            case "unsent":
+                flush()
+                items.append(.user(event, .unsent))
             case "assistant_msg":
                 flush()
                 items.append(.agent(id: "agent-\(event.id)", text: event.content ?? ""))
