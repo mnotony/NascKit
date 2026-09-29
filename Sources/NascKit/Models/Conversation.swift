@@ -94,7 +94,8 @@ public enum Conversation {
     /// reconnect replays the whole log. Nothing on screen is cleared or moved: an event newer than
     /// everything held is appended; one the client missed (never broadcast live, or sent while it was
     /// away) is slotted in by sequence; a logged `user_msg` takes the place of the client's own echo
-    /// of it. Local echoes that never reached the log (`unsent`, a queued `interrupt`) stay put.
+    /// of it — even one marked `unsent`, whose reply was lost rather than the prompt. Local echoes
+    /// that never reached the log stay put.
     public static func merge(_ incoming: NascEvent, into events: [NascEvent]) -> [NascEvent]? {
         guard let seq = incoming.sequence else { return events + [incoming] }
         guard !events.contains(where: { $0.sequence == seq }) else { return nil }
@@ -103,7 +104,8 @@ public enum Conversation {
         var slot: Int?
         if incoming.kind == "user_msg",
             let echo = merged.firstIndex(where: {
-                $0.kind == "user_msg" && $0.sequence == nil && same($0.content, incoming.content)
+                ($0.kind == "user_msg" || $0.kind == "unsent") && $0.sequence == nil
+                    && same($0.content, incoming.content)
             }) {
             merged.remove(at: echo)
             slot = echo

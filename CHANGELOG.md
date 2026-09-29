@@ -17,7 +17,8 @@ Read a session as a conversation. Pairs with ogma's `tool_call` narration and na
 - **`Conversation.merge`** — fold an incoming event into what a client holds without clearing it: a
   reconnect's full replay drops what is already on screen, slots in what was missed by sequence
   (including the `user_msg`s nasc never broadcasts live), and lets a logged `user_msg` take its echo's
-  place — so local echoes (`unsent`, a queued `interrupt`) survive a reconnect where they were typed.
+  place (even an `unsent` one whose reply was lost, not the prompt) — so local echoes survive a
+  reconnect where they were typed.
 - **Streams end when the channel does** — `attach` and `lobbyUpdates` finish on `phx_close` or
   `phx_error` (`InFrame.endsChannel`; `PhoenixChannel` now forwards `phx_close`) instead of leaving a
   client that reads as attached to a channel that will never push again.

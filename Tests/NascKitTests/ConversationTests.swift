@@ -264,6 +264,20 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(merged?.map { $0.sequence ?? -1 }, [7, -1])
     }
 
+    func testAMessageMarkedUnsentThatNascDidLogIsShownOnceAsSent() {
+        // The prompt got there; only its reply was lost with the socket.
+        let held = [
+            userMsg(1, "first"), assistantMsg(2, "ok"),
+            NascEvent(kind: "unsent", role: "user", content: "second"),
+        ]
+        var merged = held
+        for event in [userMsg(1, "first"), assistantMsg(2, "ok"), userMsg(3, "second")] {
+            if let next = Conversation.merge(event, into: merged) { merged = next }
+        }
+
+        XCTAssertEqual(render(Conversation.items(merged)), ["you: first", "agent: ok", "you: second"])
+    }
+
     func testEventsWithoutASequenceAreAlwaysAppended() {
         let held = [userMsg(1, "go")]
         let done = NascEvent.from(frame: InFrame(refID: nil, topic: "session:s", event: "done", payload: [:]))!
