@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v0.6.0 — 2026-09-29
+
+Read a session as a conversation. Pairs with ogma's `tool_call` narration and nasc-ios v0.7.0.
+
+- **`NascEvent.narration`** — the prose the agent wrote before a tool call (`metadata.narration` on
+  the turn's first `tool_call`), which until now only streamed as tokens and was lost when the call
+  landed.
+- **`Conversation.items`** — a pure projection of a session's events into `ConversationItem`s: the
+  user's messages, the agent's (final answers and narration), `system` notices, and everything
+  between folded into a `Steps` group with its tool count and last tool. A client-local `interrupt`
+  echo shows as queued until the agent logs it as a `user_msg`.
+
 ## v0.5.1 — 2026-09-04
 
 - **`/tts` credential** (#11) — `NascClient.synthesize` sends the endpoint's device credential as

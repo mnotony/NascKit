@@ -39,6 +39,9 @@ public struct NascEvent: Sendable, Identifiable {
     public let approval: Approval?
     /// The resolution (`approve` | `deny` | `expired`) when `kind == "input_provided"`, else `nil`.
     public let outcome: String?
+    /// The prose the agent wrote before this call (`metadata.narration`) when `kind == "tool_call"`
+    /// and it said something, else `nil`. Only the first call of a turn carries it.
+    public let narration: String?
 
     public init(
         id: UUID = UUID(),
@@ -48,7 +51,8 @@ public struct NascEvent: Sendable, Identifiable {
         sequence: Int? = nil,
         requestID: String? = nil,
         approval: Approval? = nil,
-        outcome: String? = nil
+        outcome: String? = nil,
+        narration: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -58,6 +62,7 @@ public struct NascEvent: Sendable, Identifiable {
         self.requestID = requestID
         self.approval = approval
         self.outcome = outcome
+        self.narration = narration
     }
 
     static func from(frame: InFrame) -> NascEvent? {
@@ -76,7 +81,10 @@ public struct NascEvent: Sendable, Identifiable {
                 approval: kind == "input_requested"
                     ? Approval.from(content: p["content"] as? String, metadata: meta)
                     : nil,
-                outcome: kind == "input_provided" ? meta?["outcome"] as? String : nil
+                outcome: kind == "input_provided" ? meta?["outcome"] as? String : nil,
+                narration: kind == "tool_call"
+                    ? (meta?["narration"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    : nil
             )
 
         case "token":
