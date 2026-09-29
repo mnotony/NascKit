@@ -14,7 +14,12 @@ Read a session as a conversation. Pairs with ogma's `tool_call` narration and na
   between folded into a `Steps` group with its tool count and last tool. Each user entry carries its
   `Delivery`: a client-local `interrupt` echo is `.queued` until the agent logs it as a `user_msg`, and
   an `unsent` echo (sending failed) is `.unsent`.
-- **`attach` ends on a channel crash** — a `phx_error` finishes the event stream instead of leaving a
+- **`Conversation.merge`** — fold an incoming event into what a client holds without clearing it: a
+  reconnect's full replay drops what is already on screen, slots in what was missed by sequence
+  (including the `user_msg`s nasc never broadcasts live), and lets a logged `user_msg` take its echo's
+  place — so local echoes (`unsent`, a queued `interrupt`) survive a reconnect where they were typed.
+- **Streams end when the channel does** — `attach` and `lobbyUpdates` finish on `phx_close` or
+  `phx_error` (`InFrame.endsChannel`; `PhoenixChannel` now forwards `phx_close`) instead of leaving a
   client that reads as attached to a channel that will never push again.
 
 ## v0.5.1 — 2026-09-04

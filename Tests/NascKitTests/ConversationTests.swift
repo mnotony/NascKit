@@ -198,7 +198,82 @@ final class ConversationTests: XCTestCase {
         XCTAssertTrue(Conversation.items([runStarted(1), statusChange(2, "done")]).isEmpty)
     }
 
+    // --- merge (live events and a reconnect's full replay into what's on screen) ---
+
+    func testALiveEventIsAppended() {
+        let held = [userMsg(1, "go"), toolCall("shell", seq: 2)]
+        XCTAssertEqual(sequences(Conversation.merge(toolResult("shell", seq: 3), into: held)), [1, 2, 3])
+    }
+
+    func testAReplayedEventAlreadyOnScreenIsDropped() {
+        let held = [userMsg(1, "go"), toolCall("shell", seq: 2)]
+        XCTAssertNil(Conversation.merge(toolCall("shell", seq: 2), into: held))
+    }
+
+    func testAReconnectFillsInWhatWasMissedInOrderAndKeepsLocalEchoes() {
+        // Seen live: the agent's events (user_msg and run markers are never broadcast live), the
+        // phone's own echo, and a later interrupt echo the agent hasn't taken yet.
+        var held: [NascEvent] = [
+            NascEvent(kind: "user_msg", role: "user", content: "fix it"),
+            toolCall("shell", seq: 3, narration: "Looking."),
+            toolResult("shell", seq: 4),
+            NascEvent(kind: "interrupt", role: "user", content: "and add a test"),
+        ]
+        // The replay after reconnecting: the whole log, then what happened while away.
+        let replay = [
+            runStarted(1), userMsg(2, "fix it"), toolCall("shell", seq: 3, narration: "Looking."),
+            toolResult("shell", seq: 4), userMsg(5, "and add a test"), toolCall("edit_file", seq: 6),
+            toolResult("edit_file", seq: 7), assistantMsg(8, "Fixed, with a test."), statusChange(9, "done"),
+        ]
+        for event in replay {
+            if let merged = Conversation.merge(event, into: held) { held = merged }
+        }
+
+        XCTAssertEqual(held.compactMap(\.sequence), [1, 2, 3, 4, 5, 6, 7, 8, 9])
+        XCTAssertEqual(
+            render(Conversation.items(held)),
+            [
+                "you: fix it", "agent: Looking.", "steps: 1 · shell",
+                "you: and add a test", "steps: 1 · edit_file", "agent: Fixed, with a test.",
+            ]
+        )
+    }
+
+    func testAnUnsentMessageStaysWhereItWasTyped() {
+        var held: [NascEvent] = [
+            userMsg(1, "first"), assistantMsg(2, "ok"),
+            NascEvent(kind: "unsent", role: "user", content: "second"),
+        ]
+        for event in [userMsg(1, "first"), assistantMsg(2, "ok"), userMsg(3, "third"), assistantMsg(4, "done")] {
+            if let merged = Conversation.merge(event, into: held) { held = merged }
+        }
+
+        XCTAssertEqual(
+            render(Conversation.items(held)),
+            ["you: first", "agent: ok", "you (not sent): second", "you: third", "agent: done"]
+        )
+    }
+
+    func testTheLoggedCopyReplacesOnlyOneMatchingEcho() {
+        let held = [
+            NascEvent(kind: "user_msg", role: "user", content: "again"),
+            NascEvent(kind: "user_msg", role: "user", content: "again"),
+        ]
+        let merged = Conversation.merge(userMsg(7, "again"), into: held)
+
+        XCTAssertEqual(merged?.map { $0.sequence ?? -1 }, [7, -1])
+    }
+
+    func testEventsWithoutASequenceAreAlwaysAppended() {
+        let held = [userMsg(1, "go")]
+        let done = NascEvent.from(frame: InFrame(refID: nil, topic: "session:s", event: "done", payload: [:]))!
+
+        XCTAssertEqual(Conversation.merge(done, into: held)?.map(\.kind), ["user_msg", "done"])
+    }
+
     // --- helpers ---
+
+    private func sequences(_ events: [NascEvent]?) -> [Int] { events?.compactMap(\.sequence) ?? [] }
 
     private func render(_ items: [ConversationItem]) -> [String] {
         items.map { item in

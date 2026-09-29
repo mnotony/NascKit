@@ -156,7 +156,7 @@ public actor PhoenixChannel: ChannelProtocol {
             if let refID = frame.refID, let cont = pending.removeValue(forKey: refID) {
                 cont.resume(returning: frame.payload)
             }
-        } else if frame.event != "phx_close" {
+        } else {
             pushContinuation?.yield(frame)
         }
     }

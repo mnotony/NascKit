@@ -84,7 +84,9 @@ public actor NascClient {
         return AsyncStream { continuation in
             let task = Task {
                 if let list = try? await Self.fetchSessions(lobby) { continuation.yield(list) }
-                for await frame in pushes where frame.event == "sessions_changed" {
+                for await frame in pushes {
+                    if frame.endsChannel { break }
+                    guard frame.event == "sessions_changed" else { continue }
                     if let list = try? await Self.fetchSessions(lobby) { continuation.yield(list) }
                 }
                 continuation.finish()
@@ -221,9 +223,7 @@ public actor NascClient {
         return AsyncStream { continuation in
             let task = Task {
                 for await frame in pushes {
-                    // The channel crashed server-side: nothing more arrives on it, so end the stream
-                    // rather than read as attached (this client does not rejoin).
-                    if frame.event == "phx_error" { break }
+                    if frame.endsChannel { break }
                     if let event = NascEvent.from(frame: frame) {
                         continuation.yield(event)
                     }

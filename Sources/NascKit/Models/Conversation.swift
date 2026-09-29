@@ -90,6 +90,33 @@ public enum Conversation {
         return items
     }
 
+    /// Fold one incoming event into what a client holds, or `nil` when it is already there — a
+    /// reconnect replays the whole log. Nothing on screen is cleared or moved: an event newer than
+    /// everything held is appended; one the client missed (never broadcast live, or sent while it was
+    /// away) is slotted in by sequence; a logged `user_msg` takes the place of the client's own echo
+    /// of it. Local echoes that never reached the log (`unsent`, a queued `interrupt`) stay put.
+    public static func merge(_ incoming: NascEvent, into events: [NascEvent]) -> [NascEvent]? {
+        guard let seq = incoming.sequence else { return events + [incoming] }
+        guard !events.contains(where: { $0.sequence == seq }) else { return nil }
+
+        var merged = events
+        var slot: Int?
+        if incoming.kind == "user_msg",
+            let echo = merged.firstIndex(where: {
+                $0.kind == "user_msg" && $0.sequence == nil && same($0.content, incoming.content)
+            }) {
+            merged.remove(at: echo)
+            slot = echo
+        }
+
+        // It belongs between the sequenced events either side of it; among the local echoes there,
+        // it takes its own echo's slot, else goes last — after what the client already showed.
+        let lo = merged.lastIndex(where: { ($0.sequence ?? .max) < seq }).map { $0 + 1 } ?? 0
+        let hi = merged.firstIndex(where: { ($0.sequence ?? .min) > seq }) ?? merged.count
+        merged.insert(incoming, at: slot.flatMap { (lo...hi).contains($0) ? $0 : nil } ?? hi)
+        return merged
+    }
+
     /// Interrupt echoes the agent has since logged: each logged `user_msg` (one with a sequence — a
     /// local echo has none) answers the earliest still-open interrupt with the same text.
     private static func answeredInterrupts(_ events: [NascEvent]) -> Set<UUID> {
