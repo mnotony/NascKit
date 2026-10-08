@@ -74,6 +74,48 @@ public actor NascClient {
         try await lobbyMutate("delete_session", ["id": id])
     }
 
+    /// Delete several sessions over one lobby connection. Returns the ids that were not deleted;
+    /// throws only if the lobby can't be joined (nothing was attempted).
+    public func deleteSessions(ids: [String]) async throws -> [String] {
+        let lobby = PhoenixChannel()
+        do {
+            try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
+        } catch {
+            await lobby.disconnect()
+            throw error
+        }
+        let failed = await Self.deleteEach(ids, listed: { Set(try await Self.fetchSessions(lobby).map(\.id)) }) { id in
+            _ = try await lobby.call(event: "delete_session", payload: ["id": id])
+        }
+        await lobby.disconnect()
+        return failed
+    }
+
+    /// Delete `ids` in order and return the ones that failed. A server refusal fails just that id;
+    /// any other error means the socket is gone, so that id and every remaining one fail untried —
+    /// rather than each waiting out the 30s call timeout. A failed id that is no longer `listed` was
+    /// deleted after all: nasc refuses an already-archived session exactly as it does a real
+    /// failure, and a timed-out delete may have landed. If the listing fails, every failure stands.
+    static func deleteEach(
+        _ ids: [String],
+        listed: () async throws -> Set<String>,
+        using delete: (String) async throws -> Void
+    ) async -> [String] {
+        var failed: [String] = []
+        for (i, id) in ids.enumerated() {
+            do {
+                try await delete(id)
+            } catch ChannelError.callFailed {
+                failed.append(id)
+            } catch {
+                failed += ids[i...]
+                break
+            }
+        }
+        guard !failed.isEmpty, let still = try? await listed() else { return failed }
+        return failed.filter(still.contains)
+    }
+
     /// Live session list: yields the current list, then re-yields whenever any device
     /// creates/renames/deletes a session (server broadcasts `sessions_changed`).
     public func lobbyUpdates() async throws -> AsyncStream<[SessionSummary]> {
