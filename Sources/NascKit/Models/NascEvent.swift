@@ -23,6 +23,9 @@ public struct SessionSummary: Sendable, Identifiable, Hashable {
         self.title = title
         self.runState = runState
     }
+
+    /// Still running, or waiting on the user — deleting (archiving) doesn't stop it.
+    public var isLive: Bool { runState == "running" || runState == "awaiting_input" }
 }
 
 /// A session event as seen by a client: a durable `event` (assistant_msg, tool_call,

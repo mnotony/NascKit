@@ -18,8 +18,9 @@ credential takes nasc's open (dual-accept) path.
 
 `NascClient`: `createSession` · `listSessions` / `lobbyUpdates` (live) · `attach`
 (event stream) · `prompt` · `decide` · `interrupt` · `renameSession` · `deleteSession`
-· `registerDevice`. Transport: Phoenix channels over `URLSessionWebSocketTask`
-(`PhoenixChannel`/`PhoenixFrame`, harvested from RelayKit, adapted to nasc's `/client`).
+/ `deleteSessions` (several over one connection) · `registerDevice`. Transport: Phoenix
+channels over `URLSessionWebSocketTask` (`PhoenixChannel`/`PhoenixFrame`, harvested from
+RelayKit, adapted to nasc's `/client`).
 
 Models: `SessionSummary` (with a live `runState`), `NascEvent` (a `tool_call` carries the agent's
 `narration`), `Approval` (a parsed `input_requested` — tool/reason/severity/`expires_at`), and

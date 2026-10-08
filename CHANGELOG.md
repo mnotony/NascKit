@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## v0.7.0 — 2026-10-08
+
+Bulk delete. Pairs with nasc-ios v0.8.0 (select several sessions, delete once).
+
+- **`NascClient.deleteSessions(ids:)`** — delete several sessions over one lobby connection and get
+  back the ids that weren't deleted. A server refusal fails just that id; a dropped socket fails that
+  id and the rest untried, instead of each waiting out the 30 s call timeout. A failed id that a fresh
+  `list_sessions` no longer shows counts as deleted (nasc refuses an already-archived session the
+  same way it refuses a real failure). Throws only if the lobby can't be joined.
+- **`SessionSummary.isLive`** — `running` or `awaiting_input`: a delete (archive) won't stop it.
+
 ## v0.6.0 — 2026-09-29
 
 Read a session as a conversation. Pairs with ogma's `tool_call` narration and nasc-ios v0.7.0.
