@@ -60,6 +60,33 @@ final class PhoenixChannelTests: XCTestCase {
         }
     }
 
+    func testRefusedUpgradeWithoutACredentialSaysOneIsRequired() async throws {
+        let server = try SilentServer(refuseWith: 403)
+        try await server.start()
+        defer { server.stop() }
+        let channel = PhoenixChannel()
+        do {
+            try await within(.seconds(3)) { try await channel.connect(serverURL: server.url, credential: "", topic: "lobby") }
+            XCTFail("connect should be refused")
+        } catch {
+            guard case ChannelError.joinFailed(let reason) = error else { return XCTFail("expected joinFailed, got \(error)") }
+            XCTAssertEqual(reason, "credential required (HTTP 403)")
+        }
+    }
+
+    func testAnInvalidURLNeverCarriesTheCredential() async {
+        // A typo in the port makes the socket URL unparseable; the error is shown on screen.
+        let channel = PhoenixChannel()
+        do {
+            try await channel.connect(serverURL: "ws://host:41OO", credential: "s3cret-device-credential", topic: "lobby")
+            XCTFail("connect should reject the URL")
+        } catch {
+            guard case ChannelError.invalidURL = error else { return XCTFail("expected invalidURL, got \(error)") }
+            XCTAssertFalse(error.localizedDescription.contains("s3cret"), error.localizedDescription)
+            XCTAssertTrue(error.localizedDescription.contains("ws://host:41OO"), error.localizedDescription)
+        }
+    }
+
     func testCancellingAConnectClosesItsSocketAtOnce() async throws {
         stub.join = .ignore
         let channel = PhoenixChannel(joinTimeout: .seconds(10))

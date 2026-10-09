@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## v0.9.0 — 2026-10-08
+
+- **`CredentialStore`** — per-server device credentials in the Keychain, shared by nasc-ios and
+  nasc-mac (each had, or was about to have, its own copy). Every Keychain failure throws: a read the
+  Keychain refused (a denied prompt, a locked keychain) is not "no credential" and must never be
+  saved over as one. `save(_:server:replacing:)` stores (update, or add) and only then drops the
+  credential under a server's old URL, so a failure never loses both; empty removes.
+- **No credential in an error** — an unparseable socket URL threw `invalidURL` with the full URL,
+  `&credential=<secret>` included, and the apps show that reason on screen. It now names the server
+  URL only.
+- **Required vs refused** — an upgrade refused with 401/403 says "credential required" when none
+  was sent and "credential refused" when one was.
+
 ## v0.8.0 — 2026-10-08
 
 Live lists that come back. Pairs with nasc-ios v0.9.0 and nasc-mac v0.2.0. **Breaking:** the live
