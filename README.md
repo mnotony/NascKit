@@ -24,6 +24,9 @@ credential takes nasc's open (dual-accept) path.
 (`PhoenixChannel`/`PhoenixFrame`, harvested from RelayKit, adapted to nasc's `/client`): joins and
 calls time out, and a heartbeat that goes unanswered while nothing else arrives drops the socket.
 
+`CredentialStore` keeps a device credential per server URL in the Keychain (throws on any Keychain
+failure rather than reading it as "none").
+
 Models: `SessionSummary` (with a live `runState`), `NascEvent` (a `tool_call` carries the agent's
 `narration`), `Approval` (a parsed `input_requested` — tool/reason/severity/`expires_at`), and
 `EditDiff` (an edit tool's result parsed into a renderable `+`/`-` diff). `Conversation.items` projects

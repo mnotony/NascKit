@@ -60,7 +60,8 @@ public actor PhoenixChannel: ChannelProtocol {
             let encoded = credential.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? credential
             wsURL += "&credential=\(encoded)"
         }
-        guard let url = URL(string: wsURL) else { throw ChannelError.invalidURL(wsURL) }
+        // The error is shown on screen: name the server, never the URL that carries the credential.
+        guard let url = URL(string: wsURL) else { throw ChannelError.invalidURL(base) }
 
         Log.channel.info("Connecting to \(serverURL, privacy: .public)/client/websocket [\(topic, privacy: .public)]")
 
@@ -77,9 +78,9 @@ public actor PhoenixChannel: ChannelProtocol {
             reply = try await request(joinFrame, timeout: joinTimeout)
         } catch {
             disconnect()
-            // nasc refuses a credential it won't accept at the upgrade (403), before any join.
+            // nasc refuses a missing or bad credential at the upgrade (403), before any join.
             if let status = (ws.response as? HTTPURLResponse)?.statusCode, status == 401 || status == 403 {
-                throw ChannelError.joinFailed("credential refused (HTTP \(status))")
+                throw ChannelError.joinFailed("credential \(credential.isEmpty ? "required" : "refused") (HTTP \(status))")
             }
             throw error
         }
