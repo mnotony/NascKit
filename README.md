@@ -16,11 +16,13 @@ for await event in events { /* tool_call / tool_result / assistant_msg / done */
 presented on the `/client` socket and as `Authorization: Bearer` on the `/tts` POST; an empty
 credential takes nasc's open (dual-accept) path.
 
-`NascClient`: `createSession` · `listSessions` / `lobbyUpdates` (live) · `attach`
-(event stream) · `prompt` · `decide` · `interrupt` · `renameSession` · `deleteSession`
-/ `deleteSessions` (several over one connection) · `registerDevice`. Transport: Phoenix
-channels over `URLSessionWebSocketTask` (`PhoenixChannel`/`PhoenixFrame`, harvested from
-RelayKit, adapted to nasc's `/client`).
+`NascClient`: `createSession` · `listSessions` · `attach` (event stream) · `prompt` · `decide` ·
+`interrupt` · `renameSession` · `deleteSession` / `deleteSessions` (several over one connection) ·
+`registerDevice`. Live feeds — `lobbyUpdates`, `fleetUpdates`, `agentUpdates` — yield
+`LiveUpdate.value` snapshots and `.lost(reason)` when the socket drops, and reconnect on their own
+(backoff 1 → 30 s). Transport: Phoenix channels over `URLSessionWebSocketTask`
+(`PhoenixChannel`/`PhoenixFrame`, harvested from RelayKit, adapted to nasc's `/client`): joins and
+calls time out, and a heartbeat that goes unanswered while nothing else arrives drops the socket.
 
 Models: `SessionSummary` (with a live `runState`), `NascEvent` (a `tool_call` carries the agent's
 `narration`), `Approval` (a parsed `input_requested` — tool/reason/severity/`expires_at`), and

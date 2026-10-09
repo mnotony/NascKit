@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## v0.8.0 — 2026-10-08
+
+Live lists that come back. Pairs with nasc-ios v0.9.0 and nasc-mac v0.2.0. **Breaking:** the live
+feeds' signatures changed (below).
+
+- **Self-healing feeds** — `lobbyUpdates()`, `fleetUpdates()`, `agentUpdates()` are now
+  `nonisolated`, non-throwing, and return `AsyncStream<LiveUpdate<T>>`: `.value(snapshot)` while
+  connected, `.lost(reason)` when the socket drops or can't be made, then they reconnect on their own
+  (backoff 1, 2, 4, 8, 16, 30 s; reset after a connection that lasted 30 s). Before, each feed ended
+  for good on the first drop. `fleetUpdates` / `agentUpdates` also end their connection on
+  `phx_close` / `phx_error` now. `NascClient.backoff` is public for clients that retry on their own.
+- **Connect has a deadline** — a join unanswered in 15 s throws `timeout`, counted from the start, so
+  a send that can't go out times out too. Offline, a connect fails at once (`waitsForConnectivity`
+  is off; one shared `URLSession` replaces one per connection, which were never invalidated). An
+  upgrade refused with HTTP 401/403 throws `joinFailed("credential refused (HTTP 403)")`.
+- **Nothing leaks** — a failed connect, and every one-shot lobby call whose call fails
+  (`createSession`, `listProjects`, `listSessions`, `deleteSessions`, renames/deletes/agent edits,
+  `registerDevice`), closes its socket. Cancelling a join or call fails it at once.
+- **Dead sockets are noticed** — a heartbeat with no reply in 10 s, while nothing else arrived,
+  drops the connection (any inbound frame counts as alive: a session replay delays the reply).
+- `PhoenixChannel(joinTimeout:callTimeout:heartbeatInterval:heartbeatTimeout:)`.
+
 ## v0.7.0 — 2026-10-08
 
 Bulk delete. Pairs with nasc-ios v0.8.0 (select several sessions, delete once).
