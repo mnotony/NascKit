@@ -14,15 +14,12 @@ public actor NascClient {
     /// Create a new session via the lobby. Returns `(id, slug)`. A `project` name lets nasc route
     /// the session to an agent that can reach it (e.g. the one holding that project's client VPN).
     public func createSession(persona: String? = nil, project: String? = nil, autonomy: Bool = false) async throws -> (id: String, slug: String) {
-        let lobby = PhoenixChannel()
-        try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
         var payload: [String: Any] = [:]
         if let persona { payload["persona_slug"] = persona }
         if let project { payload["project"] = project }
         // "turn this task loose": the run auto-approves safe tool calls; consequential ones still pause.
         if autonomy { payload["autonomy"] = true }
-        let resp = try await lobby.call(event: "create_session", payload: payload)
-        await lobby.disconnect()
+        let resp = try await withLobby { try await $0.call(event: "create_session", payload: payload) }
 
         guard let id = resp["id"] as? String else {
             throw ChannelError.callFailed("no session id in reply")
@@ -32,10 +29,7 @@ public actor NascClient {
 
     /// The projects the user can start a session on — the picker source.
     public func listProjects() async throws -> [Project] {
-        let lobby = PhoenixChannel()
-        try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
-        let resp = try await lobby.call(event: "list_projects", payload: [:])
-        await lobby.disconnect()
+        let resp = try await withLobby { try await $0.call(event: "list_projects", payload: [:]) }
 
         let arr = resp["projects"] as? [[String: Any]] ?? []
         return arr.compactMap { dict in
@@ -46,22 +40,7 @@ public actor NascClient {
 
     /// List recent sessions (newest first) via the lobby.
     public func listSessions() async throws -> [SessionSummary] {
-        let lobby = PhoenixChannel()
-        try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
-        let resp = try await lobby.call(event: "list_sessions", payload: [:])
-        await lobby.disconnect()
-
-        let arr = resp["sessions"] as? [[String: Any]] ?? []
-        return arr.compactMap { dict in
-            guard let id = dict["id"] as? String else { return nil }
-            return SessionSummary(
-                id: id,
-                slug: dict["slug"] as? String ?? id,
-                status: dict["status"] as? String,
-                title: dict["title"] as? String,
-                runState: dict["run_state"] as? String
-            )
-        }
+        try await withLobby { try await Self.fetchSessions($0) }
     }
 
     /// Rename a session (sets its title).
@@ -77,18 +56,11 @@ public actor NascClient {
     /// Delete several sessions over one lobby connection. Returns the ids that were not deleted;
     /// throws only if the lobby can't be joined (nothing was attempted).
     public func deleteSessions(ids: [String]) async throws -> [String] {
-        let lobby = PhoenixChannel()
-        do {
-            try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
-        } catch {
-            await lobby.disconnect()
-            throw error
+        try await withLobby { lobby in
+            await Self.deleteEach(ids, listed: { Set(try await Self.fetchSessions(lobby).map(\.id)) }) { id in
+                _ = try await lobby.call(event: "delete_session", payload: ["id": id])
+            }
         }
-        let failed = await Self.deleteEach(ids, listed: { Set(try await Self.fetchSessions(lobby).map(\.id)) }) { id in
-            _ = try await lobby.call(event: "delete_session", payload: ["id": id])
-        }
-        await lobby.disconnect()
-        return failed
     }
 
     /// Delete `ids` in order and return the ones that failed. A server refusal fails just that id;
@@ -116,35 +88,29 @@ public actor NascClient {
         return failed.filter(still.contains)
     }
 
-    /// Live session list: yields the current list, then re-yields whenever any device
-    /// creates/renames/deletes a session (server broadcasts `sessions_changed`).
-    public func lobbyUpdates() async throws -> AsyncStream<[SessionSummary]> {
-        let lobby = PhoenixChannel()
-        try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
-        let pushes = lobby.pushes
-
-        return AsyncStream { continuation in
-            let task = Task {
-                if let list = try? await Self.fetchSessions(lobby) { continuation.yield(list) }
-                for await frame in pushes {
-                    if frame.endsChannel { break }
-                    guard frame.event == "sessions_changed" else { continue }
-                    if let list = try? await Self.fetchSessions(lobby) { continuation.yield(list) }
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in
-                task.cancel()
-                Task { await lobby.disconnect() }
-            }
-        }
+    /// Live session list: the current list, then again whenever any device creates/renames/deletes
+    /// a session (`sessions_changed`). Reconnects on its own after a drop (`.lost` until it's back).
+    public nonisolated func lobbyUpdates() -> AsyncStream<LiveUpdate<[SessionSummary]>> {
+        let endpoint = endpoint
+        return Self.resilient { try await Self.lobbyFeed(endpoint, refreshOn: ["sessions_changed"], fetch: { try await Self.fetchSessions($0) }) }
     }
 
     private func lobbyMutate(_ event: String, _ payload: [String: Any]) async throws {
+        _ = try await withLobby { try await $0.call(event: event, payload: payload) }
+    }
+
+    /// Join the lobby, run `body`, and close the connection — whether `body` succeeds or throws.
+    private func withLobby<T>(_ body: (PhoenixChannel) async throws -> T) async throws -> T {
         let lobby = PhoenixChannel()
         try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
-        _ = try await lobby.call(event: event, payload: payload)
-        await lobby.disconnect()
+        do {
+            let result = try await body(lobby)
+            await lobby.disconnect()
+            return result
+        } catch {
+            await lobby.disconnect()
+            throw error
+        }
     }
 
     private static func fetchSessions(_ lobby: PhoenixChannel) async throws -> [SessionSummary] {
@@ -162,25 +128,12 @@ public actor NascClient {
         }
     }
 
-    /// Live fleet status: yields the current snapshot, then re-yields whenever agents
-    /// connect/disconnect or sessions change.
-    public func fleetUpdates() async throws -> AsyncStream<FleetStatus> {
-        let lobby = PhoenixChannel()
-        try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
-        let pushes = lobby.pushes
-
-        return AsyncStream { continuation in
-            let task = Task {
-                if let status = try? await Self.fetchFleet(lobby) { continuation.yield(status) }
-                for await frame in pushes where frame.event == "fleet_changed" || frame.event == "sessions_changed" {
-                    if let status = try? await Self.fetchFleet(lobby) { continuation.yield(status) }
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in
-                task.cancel()
-                Task { await lobby.disconnect() }
-            }
+    /// Live fleet status: the current snapshot, then again whenever agents connect/disconnect or
+    /// sessions change. Reconnects on its own after a drop.
+    public nonisolated func fleetUpdates() -> AsyncStream<LiveUpdate<FleetStatus>> {
+        let endpoint = endpoint
+        return Self.resilient {
+            try await Self.lobbyFeed(endpoint, refreshOn: ["fleet_changed", "sessions_changed"], fetch: { try await Self.fetchFleet($0) })
         }
     }
 
@@ -193,11 +146,7 @@ public actor NascClient {
 
     /// The fleet's agents with their project roots + autonomy — the Agents screen source.
     public func listAgents() async throws -> [Agent] {
-        let lobby = PhoenixChannel()
-        try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
-        let agents = try await Self.fetchAgents(lobby)
-        await lobby.disconnect()
-        return agents
+        try await withLobby { try await Self.fetchAgents($0) }
     }
 
     /// Turn an agent loose (or rein it in): its runs auto-approve safe tool calls.
@@ -215,25 +164,12 @@ public actor NascClient {
         try await lobbyMutate("remove_agent_root", ["agent_id": agentID, "path": path])
     }
 
-    /// Live agent list: the current agents, then re-yields on `agents_changed` (roots/autonomy
-    /// edits) and `fleet_changed` (connect/disconnect).
-    public func agentUpdates() async throws -> AsyncStream<[Agent]> {
-        let lobby = PhoenixChannel()
-        try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
-        let pushes = lobby.pushes
-
-        return AsyncStream { continuation in
-            let task = Task {
-                if let list = try? await Self.fetchAgents(lobby) { continuation.yield(list) }
-                for await frame in pushes where frame.event == "agents_changed" || frame.event == "fleet_changed" {
-                    if let list = try? await Self.fetchAgents(lobby) { continuation.yield(list) }
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in
-                task.cancel()
-                Task { await lobby.disconnect() }
-            }
+    /// Live agent list: the current agents, then again on `agents_changed` (roots/autonomy edits)
+    /// and `fleet_changed` (connect/disconnect). Reconnects on its own after a drop.
+    public nonisolated func agentUpdates() -> AsyncStream<LiveUpdate<[Agent]>> {
+        let endpoint = endpoint
+        return Self.resilient {
+            try await Self.lobbyFeed(endpoint, refreshOn: ["agents_changed", "fleet_changed"], fetch: { try await Self.fetchAgents($0) })
         }
     }
 
@@ -245,12 +181,9 @@ public actor NascClient {
 
     /// Register this device's APNs token so nasc can push it (e.g. on approval needed).
     public func registerDevice(apnsToken: String, env: String = "sandbox", label: String? = nil) async throws {
-        let lobby = PhoenixChannel()
-        try await lobby.connect(serverURL: endpoint.serverURL, credential: endpoint.credential, topic: NascEndpoint.lobbyTopic)
         var payload: [String: Any] = ["apns_token": apnsToken, "platform": "ios", "apns_env": env]
         if let label { payload["label"] = label }
-        _ = try await lobby.call(event: "register_device", payload: payload)
-        await lobby.disconnect()
+        _ = try await withLobby { try await $0.call(event: "register_device", payload: payload) }
     }
 
     /// Attach to a session: join `session:<id>` and return a live event stream
