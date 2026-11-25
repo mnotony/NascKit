@@ -33,6 +33,7 @@ final class PhoenixStub: @unchecked Sendable {
     private var _answerHeartbeats = true
     private var _replies: [String: [String: Any]] = [:]
     private var _refuse: Set<String> = []
+    private var _received: [(String, [String: Any])] = []
     private var _heartbeats = 0
     private var _joins = 0
     private var _closed = 0
@@ -57,6 +58,8 @@ final class PhoenixStub: @unchecked Sendable {
         get { locked { _refuse } }
         set { locked { _refuse = newValue } }
     }
+    /// Every call the client made other than joins and heartbeats, in order: (event, payload).
+    var received: [(String, [String: Any])] { locked { _received } }
     var heartbeatsSeen: Int { locked { _heartbeats } }
     var joinsSeen: Int { locked { _joins } }
     /// Connections the client has closed (or that dropped).
@@ -168,6 +171,7 @@ final class PhoenixStub: @unchecked Sendable {
             case .ignore: break
             }
         default:
+            locked { _received.append((event, frame[4] as? [String: Any] ?? [:])) }
             if refuse.contains(event) {
                 reply(conn, joinRef, ref, topic, "error", ["reason": "refused"])
             } else if let response = replies[event] {

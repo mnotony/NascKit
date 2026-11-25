@@ -220,6 +220,8 @@ public enum ChannelError: Error, LocalizedError {
     case callFailed(String)
     case timeout
     case disconnected
+    /// nasc took the call but its session's agent didn't get it (`delivered: false`).
+    case notDelivered
 
     public var errorDescription: String? {
         switch self {
@@ -228,6 +230,7 @@ public enum ChannelError: Error, LocalizedError {
         case .callFailed(let reason): return "Call failed: \(reason)"
         case .timeout: return "Request timed out"
         case .disconnected: return "Disconnected"
+        case .notDelivered: return "The session's agent isn't connected; it didn't get this"
         }
     }
 }

@@ -97,4 +97,82 @@ final class ApprovalTests: XCTestCase {
         XCTAssertEqual(ev?.outcome, "approve")
         XCTAssertNil(ev?.approval, "input_provided carries no approval payload")
     }
+
+    // --- discuss and suggestions (nasc docs/plans/approval-choices.md) ---
+
+    func testDiscussIsReadExactlyAndNeverForAReauth() {
+        func parse(_ extra: [String: Any]) -> Approval? {
+            var meta: [String: Any] = ["request_id": "r", "type": "tool_approval", "tool": "shell"]
+            meta.merge(extra) { $1 }
+            return Approval.from(content: nil, metadata: meta)
+        }
+        XCTAssertEqual(parse(["discuss": true])?.discuss, true)
+        XCTAssertEqual(parse(["discuss": "true"])?.discuss, false)
+        XCTAssertEqual(parse(["discuss": 1])?.discuss, false)
+        // as JSON delivers it: a boolean, not a number
+        let json = try? JSONSerialization.jsonObject(with: Data(#"{"discuss": true, "one": 1}"#.utf8)) as? [String: Any]
+        XCTAssertEqual(parse(["discuss": json?["discuss"] as Any])?.discuss, true)
+        XCTAssertEqual(parse(["discuss": json?["one"] as Any])?.discuss, false)
+        XCTAssertEqual(parse([:])?.discuss, false)
+        XCTAssertEqual(parse(["type": "reauth", "discuss": true])?.discuss, false)
+    }
+
+    func testSuggestionsAreCleanedAgainAndTwoAtMost() {
+        let meta: [String: Any] = [
+            "request_id": "r", "type": "tool_approval", "tool": "shell",
+            "suggestions": ["\u{1b}[31mDelete only build/tmp\u{1b}[0m", "Yes", 7, "List\u{202e} build/ first", "Read it"],
+        ]
+        XCTAssertEqual(
+            Approval.from(content: nil, metadata: meta)?.suggestions,
+            ["Delete only build/tmp", "List build/ first"]
+        )
+        let reauth: [String: Any] = ["request_id": "r", "type": "reauth", "suggestions": ["x"]]
+        XCTAssertEqual(Approval.from(content: nil, metadata: reauth)?.suggestions, [])
+    }
+
+    // The same table as ogma's (test/ogma/suggestions_test.exs) and nasc's: the copies can't drift.
+    func testTheCleaningRule() {
+        let kept: [(String, String)] = [
+            ("\u{1b}[31mList\u{1b}[0m", "List"),
+            ("List\u{9b}31mit", "Listit"),
+            ("List\u{202e}it", "Listit"),
+            ("List\u{200b}it", "Listit"),
+            ("List\u{2028}it", "List it"),
+            ("List\tfiles", "List files"),
+            ("a\u{85}b", "a b"),
+            ("\u{2714}\u{fe0f} done", "\u{2714} done"),
+            ("  spaced   out  ", "spaced out"),
+            ("- 1. ❯ List it", "List it"),
+            ("› first", "first"),
+            ("2) first", "first"),
+            ("--dry-run first", "--dry-run first"),
+            ("2 files only", "2 files only"),
+            ("Yesterday's log first", "Yesterday's log first"),
+            ("Run it with --dry-run first", "Run it with --dry-run first"),
+            ("Proceed without the migration", "Proceed without the migration"),
+            ("Approvers list first", "Approvers list first"),
+            ("café e\u{301}\u{302} ok", "café e\u{301}\u{302} ok"),
+            ("Use the — longer path… 日本語 😀", "Use the — longer path… 日本語 😀"),
+        ]
+        for (input, want) in kept {
+            XCTAssertEqual(Suggestions.clean([input]), [want], input.debugDescription)
+        }
+        let dropped = [
+            "Go ahead and run it", "Yes", "yes, go on", "Approve it", "Approved, run it", "Run it.",
+            "Run it .", "proceed", "Chat about this", "Chat about this call",
+            "Tell it what to do instead (esc to refuse)", "Check logs ❯ first",
+            "remember: always use staging", " remember: x", "Forget: the old path", "", "   ",
+            "Yes\u{fe00}", "Go ahead\u{e0100}", "Zalgo e\u{301}\u{302}\u{303} text",
+            String(repeating: "a", count: 81),
+        ]
+        for input in dropped {
+            XCTAssertEqual(Suggestions.clean([input]), [], input.debugDescription)
+        }
+        XCTAssertEqual(Suggestions.clean([String(repeating: "a", count: 80)]).count, 1)
+        XCTAssertEqual(
+            Suggestions.clean(["- List it", "list IT", "Read it", "Grep it"]),
+            ["List it", "Read it"]
+        )
+    }
 }
+
