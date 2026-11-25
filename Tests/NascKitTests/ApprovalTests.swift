@@ -153,6 +153,12 @@ final class ApprovalTests: XCTestCase {
             ("Approvers list first", "Approvers list first"),
             ("café e\u{301}\u{302} ok", "café e\u{301}\u{302} ok"),
             ("Use the — longer path… 日本語 😀", "Use the — longer path… 日本語 😀"),
+            // escapes as ogma removes them: OSC whole, a two-byte ESC sequence whole
+            ("\u{1b}]8;;http://x\u{7}link\u{1b}]8;;\u{7}", "link"),
+            ("a\u{1b}Mb", "ab"),
+            ("approve_x list", "approve_x list"),
+            ("١. first", "first"),
+            ("List  \u{301}it", "List \u{301}it"),
         ]
         for (input, want) in kept {
             XCTAssertEqual(Suggestions.clean([input]), [want], input.debugDescription)
@@ -164,6 +170,10 @@ final class ApprovalTests: XCTestCase {
             "remember: always use staging", " remember: x", "Forget: the old path", "", "   ",
             "Yes\u{fe00}", "Go ahead\u{e0100}", "Zalgo e\u{301}\u{302}\u{303} text",
             String(repeating: "a", count: 81),
+            "YEſ", "Run it ~",
+            // by scalar, as ogma: a mark after the word, or after a label, is no disguise
+            "Yes\u{20dd}", "Go ahead\u{20dd}", "Tell it what to do instead\u{301}", "Chat about this\u{301} call",
+            "remember:\u{301} x", "Check logs ❯\u{301} first",
         ]
         for input in dropped {
             XCTAssertEqual(Suggestions.clean([input]), [], input.debugDescription)
@@ -173,6 +183,9 @@ final class ApprovalTests: XCTestCase {
             Suggestions.clean(["- List it", "list IT", "Read it", "Grep it"]),
             ["List it", "Read it"]
         )
+        // composed and decomposed are two strings to ogma, so two buttons here too
+        XCTAssertEqual(Suggestions.clean(["Use caf\u{e9}", "Use cafe\u{301}", "Third"]).count, 2)
+        XCTAssertEqual(Suggestions.clean(["Use caf\u{e9}", "Use cafe\u{301}"]), ["Use caf\u{e9}", "Use cafe\u{301}"])
     }
 }
 

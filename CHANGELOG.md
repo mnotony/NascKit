@@ -9,7 +9,7 @@
   `true`, never for a re-auth) and `suggestions`: `metadata.suggestions` cleaned again by `Suggestions.clean`, the
   same rule as ogma's, nasc's and nasc-cli's (escape sequences, controls, format characters and variation
   selectors removed, list markers stripped, approval-like, label-like, note-like or over-80 text dropped, two at
-  most), with the same test table.
+  most), working on Unicode scalars as they do, and tested against their cases.
 
 ## v0.9.0 — 2026-10-08
 

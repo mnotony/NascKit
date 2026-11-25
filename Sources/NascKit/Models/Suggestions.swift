@@ -6,7 +6,9 @@ import Foundation
 /// ogma cleans them before they ride `input_requested.metadata.suggestions`; a client applies the
 /// same rule again (ogma's `Ogma.Suggestions`, nasc's `Nasc.Suggestions`, nasc-cli's `suggest.rs`),
 /// because another agent or an ogma bug must not get past it, and what is shown is exactly what is
-/// sent when one is picked.
+/// sent when one is picked. It works on Unicode scalars throughout, as the other copies do: Swift's
+/// `String` compares grapheme clusters (and canonical equivalents), which would keep `Yes⃝` or read
+/// `café` and `café` as one.
 public enum Suggestions {
     static let most = 2
     static let longest = 80
@@ -22,7 +24,9 @@ public enum Suggestions {
         var kept: [String] = []
         for item in items {
             let text = tidy(item)
-            if dropped(text) || kept.contains(where: { lower($0) == lower(text) }) { continue }
+            if dropped(text) || kept.contains(where: { scalars(lower($0)) == scalars(lower(text)) }) {
+                continue
+            }
             kept.append(text)
             if kept.count == most { break }
         }
@@ -37,10 +41,19 @@ public enum Suggestions {
             default: if !hidden(s) { scalars.append(s) }
             }
         }
-        let collapsed = String(scalars)
-            .split(whereSeparator: { $0.unicodeScalars.allSatisfy(\.properties.isWhitespace) })
-            .joined(separator: " ")
-        return stripMarkers(collapsed)
+        // collapse whitespace by scalar, so a combining mark after a space can't hide it
+        var collapsed = String.UnicodeScalarView()
+        var gap = false
+        for s in scalars {
+            if s.properties.isWhitespace {
+                gap = !collapsed.isEmpty
+            } else {
+                if gap { collapsed.append(" ") }
+                gap = false
+                collapsed.append(s)
+            }
+        }
+        return stripMarkers(String(collapsed))
     }
 
     /// Controls, format characters (bidi controls, zero-width characters: a ZWJ emoji sequence
@@ -115,22 +128,27 @@ public enum Suggestions {
 
     /// Dropped, never cut, so what is shown is what is sent.
     private static func dropped(_ text: String) -> Bool {
-        let l = lower(text).replacingOccurrences(of: "ſ", with: "s")
-        return text.isEmpty
+        let l = scalars(lower(text).replacingOccurrences(of: "ſ", with: "s"))
+        func starts(_ word: String) -> Bool { l.starts(with: word.unicodeScalars) }
+        return text.unicodeScalars.isEmpty
             || text.unicodeScalars.count > longest
             || combiningRun(text)
-            || text.contains("❯")
-            || l.hasPrefix("remember:") || l.hasPrefix("forget:")
+            || text.unicodeScalars.contains("❯")
+            || starts("remember:") || starts("forget:")
             || ["yes", "approve", "approved", "go ahead"].contains { startsWithWord(l, $0) }
-            || ["run it", "proceed"].contains(trimmedEnd(l))
-            || l.hasPrefix("tell it what to do instead") || l.hasPrefix("chat about this")
+            || ["run it", "proceed"].contains { scalars($0) == trimmedEnd(l) }
+            || starts("tell it what to do instead") || starts("chat about this")
     }
 
     private static func lower(_ text: String) -> String { text.lowercased() }
 
-    private static func startsWithWord(_ text: String, _ word: String) -> Bool {
-        guard text.hasPrefix(word) else { return false }
-        guard let next = text.dropFirst(word.count).unicodeScalars.first else { return true }
+    private static func scalars(_ text: String) -> [Unicode.Scalar] { Array(text.unicodeScalars) }
+
+    private static func startsWithWord(_ text: [Unicode.Scalar], _ word: String) -> Bool {
+        let w = scalars(word)
+        guard text.starts(with: w) else { return false }
+        guard w.count < text.count else { return true }
+        let next = text[w.count]
         switch next.properties.generalCategory {
         case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter,
              .decimalNumber, .letterNumber, .otherNumber, .nonspacingMark, .connectorPunctuation:
@@ -140,12 +158,10 @@ public enum Suggestions {
         }
     }
 
-    private static func trimmedEnd(_ text: String) -> String {
-        var s = Array(text.unicodeScalars)
+    private static func trimmedEnd(_ text: [Unicode.Scalar]) -> [Unicode.Scalar] {
+        var s = text
         while let last = s.last, last.properties.isWhitespace || isPunctuation(last) { s.removeLast() }
-        var view = String.UnicodeScalarView()
-        view.append(contentsOf: s)
-        return String(view)
+        return s
     }
 
     private static func isPunctuation(_ s: Unicode.Scalar) -> Bool {
