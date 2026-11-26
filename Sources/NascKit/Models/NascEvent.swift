@@ -30,7 +30,7 @@ public struct SessionSummary: Sendable, Identifiable, Hashable {
 
 /// A session event as seen by a client: a durable `event` (assistant_msg, tool_call,
 /// tool_result, input_requested, input_provided, user_msg, status_change), a streaming
-/// `token`, or `done`.
+/// `token`, a `waiting` notice, or `done`.
 public struct NascEvent: Sendable, Identifiable {
     public let id: UUID
     public let kind: String
@@ -45,6 +45,10 @@ public struct NascEvent: Sendable, Identifiable {
     /// The prose the agent wrote before this call (`metadata.narration`) when `kind == "tool_call"`
     /// and it said something, else `nil`. Only the first call of a turn carries it.
     public let narration: String?
+    /// How long the run's model call has waited, in milliseconds, when `kind == "waiting"`, else `nil`.
+    /// A `waiting` event's `content` is why (ogma's words), or `nil` once the wait is over
+    /// (nasc `docs/plans/run-waiting.md`).
+    public let waitedMs: Int?
 
     public init(
         id: UUID = UUID(),
@@ -55,7 +59,8 @@ public struct NascEvent: Sendable, Identifiable {
         requestID: String? = nil,
         approval: Approval? = nil,
         outcome: String? = nil,
-        narration: String? = nil
+        narration: String? = nil,
+        waitedMs: Int? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -66,6 +71,7 @@ public struct NascEvent: Sendable, Identifiable {
         self.approval = approval
         self.outcome = outcome
         self.narration = narration
+        self.waitedMs = waitedMs
     }
 
     static func from(frame: InFrame) -> NascEvent? {
@@ -95,6 +101,10 @@ public struct NascEvent: Sendable, Identifiable {
 
         case "done":
             return NascEvent(kind: "done")
+
+        // Advisory, never persisted: why the run's model call is slow. A `null` text ends the wait.
+        case "waiting":
+            return NascEvent(kind: "waiting", content: p["text"] as? String, waitedMs: p["waited_ms"] as? Int ?? 0)
 
         default:
             return nil
