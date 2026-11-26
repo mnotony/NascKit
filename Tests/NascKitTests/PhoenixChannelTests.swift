@@ -224,4 +224,58 @@ final class PhoenixChannelTests: XCTestCase {
         }
         XCTAssertEqual(updates, ["value:s1", "lost:Disconnected", "value:s1"])
     }
+
+    // --- approval answers (nasc docs/plans/approval-choices.md § NascKit and nasc-ios) ---
+
+    private func attached() async throws -> NascClient {
+        let client = NascClient(endpoint: NascEndpoint(serverURL: stub.url))
+        _ = try await within(.seconds(3)) { try await client.attach(sessionID: "s1") }
+        return client
+    }
+
+    func testDecideSendsDiscussOnlyWhenAsked() async throws {
+        stub.replies = ["decision": [:]]
+        let client = try await attached()
+        try await within(.seconds(3)) { try await client.decide(requestID: "r1", approve: true) }
+        try await within(.seconds(3)) {
+            try await client.decide(requestID: "r2", approve: false, discuss: true)
+        }
+        let sent = stub.received.filter { $0.0 == "decision" }.map(\.1)
+        XCTAssertEqual(sent.count, 2)
+        XCTAssertEqual(sent[0]["approve"] as? Bool, true)
+        XCTAssertNil(sent[0]["discuss"])
+        XCTAssertEqual(sent[1]["approve"] as? Bool, false)
+        XCTAssertEqual(sent[1]["discuss"] as? Bool, true)
+    }
+
+    // nasc replies ok with `delivered: false` when the session's agent isn't there: the answer
+    // didn't arrive, so the call must fail, not look sent.
+    func testAnUndeliveredDecisionOrInterruptThrows() async throws {
+        stub.replies = ["decision": ["delivered": false], "interrupt": ["delivered": false]]
+        let client = try await attached()
+        for call in ["decision", "interrupt"] {
+            do {
+                try await within(.seconds(3)) {
+                    if call == "decision" {
+                        try await client.decide(requestID: "r1", approve: false)
+                    } else {
+                        try await client.interrupt("use b")
+                    }
+                }
+                XCTFail("\(call) should throw")
+            } catch {
+                guard case ChannelError.notDelivered = error else {
+                    return XCTFail("\(call): expected notDelivered, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testADeliveredOrOlderReplyIsSuccess() async throws {
+        stub.replies = ["decision": ["delivered": true], "interrupt": [:]]
+        let client = try await attached()
+        try await within(.seconds(3)) { try await client.decide(requestID: "r1", approve: true) }
+        try await within(.seconds(3)) { try await client.interrupt("note") }
+    }
 }
+

@@ -10,11 +10,25 @@ public struct Approval: Sendable, Equatable, Identifiable {
     public let kind: ApprovalKind
     /// Deadline after which the server resolves the request as `expired`.
     public let expiresAt: Date?
+    /// The agent understands a decision to talk about the call first (`metadata.discuss`), so the
+    /// card offers Chat about this. Never for a re-auth, whose call already ran.
+    public let discuss: Bool
+    /// The model's alternatives to a tool call, cleaned again here (`metadata.suggestions`): each
+    /// shown whole, and picking one sends its text as the steer, then the refusal.
+    public let suggestions: [String]
 
-    public init(requestID: String, kind: ApprovalKind, expiresAt: Date? = nil) {
+    public init(
+        requestID: String,
+        kind: ApprovalKind,
+        expiresAt: Date? = nil,
+        discuss: Bool = false,
+        suggestions: [String] = []
+    ) {
         self.requestID = requestID
         self.kind = kind
         self.expiresAt = expiresAt
+        self.discuss = discuss
+        self.suggestions = suggestions
     }
 }
 
@@ -34,6 +48,7 @@ extension Approval {
         let expiresAt = (meta["expires_at"] as? String).flatMap(parseTimestamp)
 
         let kind: ApprovalKind
+        var suggestions: [String] = []
         switch meta["type"] as? String {
         case "reauth":
             kind = .reauth(service: meta["service"] as? String ?? "service")
@@ -44,12 +59,26 @@ extension Approval {
                 reason: meta["reason"] as? String ?? "",
                 severity: meta["severity"] as? String ?? ""
             )
+            suggestions = Suggestions.fromMetadata(meta["suggestions"])
         default:
             // Pre-contract shape: the tool name was the event `content`.
             kind = .unknown(title: content ?? "a tool call")
         }
+        let discuss = isTrue(meta["discuss"]) && meta["type"] as? String != "reauth"
 
-        return Approval(requestID: requestID, kind: kind, expiresAt: expiresAt)
+        return Approval(
+            requestID: requestID,
+            kind: kind,
+            expiresAt: expiresAt,
+            discuss: discuss,
+            suggestions: suggestions
+        )
+    }
+
+    /// Exactly JSON `true`: `as? Bool` would also take a `1`, which nasc and ogma read as no.
+    static func isTrue(_ value: Any?) -> Bool {
+        guard let n = value as? NSNumber else { return false }
+        return CFGetTypeID(n) == CFBooleanGetTypeID() && n.boolValue
     }
 
     /// nasc emits ISO-8601 UTC timestamps with microseconds; accept them with or without a

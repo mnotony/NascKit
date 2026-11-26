@@ -213,12 +213,24 @@ public actor NascClient {
         _ = try await requireSession().call(event: "prompt", payload: ["content": content])
     }
 
-    public func decide(requestID: String, approve: Bool) async throws {
-        _ = try await requireSession().call(event: "decision", payload: ["request_id": requestID, "approve": approve])
+    /// Answer an approval: approve, refuse, or (`discuss`) stop to talk about the call first. Throws
+    /// `ChannelError.notDelivered` when nasc says the session's agent didn't get it, so the question
+    /// stays open and the caller can say so.
+    public func decide(requestID: String, approve: Bool, discuss: Bool = false) async throws {
+        var payload: [String: Any] = ["request_id": requestID, "approve": approve]
+        if discuss { payload["discuss"] = true }
+        try Self.delivered(await requireSession().call(event: "decision", payload: payload))
     }
 
+    /// Guidance for the running turn (a steer sent before a refusal is one). Throws
+    /// `ChannelError.notDelivered` when the session's agent didn't get it.
     public func interrupt(_ content: String) async throws {
-        _ = try await requireSession().call(event: "interrupt", payload: ["content": content])
+        try Self.delivered(await requireSession().call(event: "interrupt", payload: ["content": content]))
+    }
+
+    /// An older nasc replies a bare ok, which is a yes.
+    private static func delivered(_ reply: [String: Any]) throws {
+        if reply["delivered"] as? Bool == false { throw ChannelError.notDelivered }
     }
 
     /// Neural TTS via nasc's `/tts` proxy (croí). Returns WAV audio bytes.

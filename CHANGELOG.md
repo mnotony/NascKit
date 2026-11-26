@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Approvals answered three ways, with the model's alternatives** (nasc `docs/plans/approval-choices.md` § NascKit
+  and nasc-ios). `NascClient.decide(requestID:approve:discuss:)` sends `discuss: true` when asked (the default keeps
+  every caller compiling); `decide` and `interrupt` throw the new `ChannelError.notDelivered` when nasc replies
+  `delivered: false`, so a question stays open and the app can say why. `Approval` gains `discuss` (exactly JSON
+  `true`, never for a re-auth) and `suggestions`: `metadata.suggestions` cleaned again by `Suggestions.clean`, the
+  same rule as ogma's, nasc's and nasc-cli's (escape sequences, controls, format characters and variation
+  selectors removed, list markers stripped, approval-like, label-like, note-like or over-80 text dropped, two at
+  most), working on Unicode scalars as they do, and tested against their cases.
+
 ## v0.9.0 — 2026-10-08
 
 - **`CredentialStore`** — per-server device credentials in the Keychain, shared by nasc-ios and
