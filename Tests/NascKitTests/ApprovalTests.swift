@@ -159,6 +159,11 @@ final class ApprovalTests: XCTestCase {
             ("approve_x list", "approve_x list"),
             ("١. first", "first"),
             ("List  \u{301}it", "List \u{301}it"),
+            // a mark or a connector after a word joins it, as in ogma: these are not "yes"
+            ("Yes\u{301} please", "Yes\u{301} please"),
+            ("yes\u{203f}now", "yes\u{203f}now"),
+            ("a\u{3000}b", "a b"),
+            ("List \u{1b}]0;title it all", "List"),
         ]
         for (input, want) in kept {
             XCTAssertEqual(Suggestions.clean([input]), [want], input.debugDescription)
