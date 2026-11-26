@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Decodes why a run is waiting** (nasc `docs/plans/run-waiting.md`, step 4 of 4). nasc's new ephemeral `waiting`
+  frame becomes a `NascEvent` of kind `waiting`. Its `content` is ogma's text, or `nil` for the frame that ends the
+  wait, and a new `waitedMs` holds how long it has waited. It carries no sequence and is never persisted;
+  nasc-ios shows it on the working row.
+
 ## v0.10.0 — 2026-11-25
 
 - **Approvals answered three ways, with the model's alternatives** (nasc `docs/plans/approval-choices.md` § NascKit

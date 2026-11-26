@@ -9,6 +9,31 @@ import XCTest
 final class ConversationTests: XCTestCase {
     // --- decode ---
 
+    // nasc docs/plans/run-waiting.md: the frame nasc relays, a line and the frame that ends it.
+    func testDecodesAWaitAndItsEnd() throws {
+        func waiting(_ json: String) throws -> NascEvent? {
+            let payload = try JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+            return NascEvent.from(frame: InFrame(refID: nil, topic: "session:s", event: "waiting", payload: payload))
+        }
+
+        let line = try XCTUnwrap(
+            waiting(#"{"session_id": "s", "text": "waiting for a free croí (M4 busy, M1 busy)", "waited_ms": 2000}"#)
+        )
+        XCTAssertEqual(line.kind, "waiting")
+        XCTAssertEqual(line.content, "waiting for a free croí (M4 busy, M1 busy)")
+        XCTAssertEqual(line.waitedMs, 2000)
+        XCTAssertNil(line.sequence)
+
+        let ended = try XCTUnwrap(waiting(#"{"session_id": "s", "text": null, "waited_ms": 2140}"#))
+        XCTAssertEqual(ended.kind, "waiting")
+        XCTAssertNil(ended.content)
+        XCTAssertEqual(ended.waitedMs, 2140)
+
+        // a frame without a length starts its clock now
+        let bare = try XCTUnwrap(waiting(#"{"session_id": "s", "text": "waiting for croí on the M4"}"#))
+        XCTAssertEqual(bare.waitedMs, 0)
+    }
+
     func testDecodesNarrationFromAToolCallsMetadata() {
         let e = event(
             #"{"sequence":12,"kind":"tool_call","role":"assistant","content":"read_file","metadata":{"args":{"path":"config.exs"},"raw":"Let me check the config.\n<tool_call>…</tool_call>","adapter":"Ogma.ToolProtocol.Native","narration":"Let me check the config."}}"#
