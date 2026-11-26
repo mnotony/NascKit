@@ -28,6 +28,10 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(ended.kind, "waiting")
         XCTAssertNil(ended.content)
         XCTAssertEqual(ended.waitedMs, 2140)
+
+        // a frame without a length starts its clock now
+        let bare = try XCTUnwrap(waiting(#"{"session_id": "s", "text": "waiting for croí on the M4"}"#))
+        XCTAssertEqual(bare.waitedMs, 0)
     }
 
     func testDecodesNarrationFromAToolCallsMetadata() {
