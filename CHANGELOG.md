@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.10.0 — 2026-11-25
+
 - **Approvals answered three ways, with the model's alternatives** (nasc `docs/plans/approval-choices.md` § NascKit
   and nasc-ios). `NascClient.decide(requestID:approve:discuss:)` sends `discuss: true` when asked (the default keeps
   every caller compiling); `decide` and `interrupt` throw the new `ChannelError.notDelivered` when nasc replies
